@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>APUNTA — ¿Qué es esto?</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); }
+    @keyframes pulseSlow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.8; } }
+    .animate-pulse-slow { animation: pulseSlow 3s infinite ease-in-out; }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans select-none antialiased bg-slate-950 overflow-hidden">
+
+  <!-- BARRA SUPERIOR -->
+  <header class="glass sticky top-0 z-40 border-b border-slate-800/80 px-4 py-3 flex justify-between items-center">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-black text-sm border border-emerald-500/30">
+        <i class="fa-solid fa-bullseye"></i>
+      </div>
+      <div>
+        <h1 class="font-black text-sm tracking-wider uppercase text-white">APUNTA</h1>
+        <p class="text-[9px] text-slate-400 -mt-0.5 tracking-tight font-medium">Asistente de acción física</p>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2">
+      <button onclick="toggleModal('configModal')" class="h-8 px-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-1.5 text-xs text-slate-300 hover:text-white transition">
+        <i class="fa-solid fa-key text-[11px] text-amber-400"></i>
+        <span id="keyStatusText" class="text-[10px]">Config Key</span>
+      </button>
+      <button onclick="openInventory()" class="h-8 px-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white transition relative">
+        <i class="fa-solid fa-box-archive text-emerald-400"></i>
+        <span id="invBadge" class="bg-emerald-500 text-slate-950 font-black text-[10px] w-4 h-4 rounded-full flex items-center justify-center">0</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="flex-1 relative overflow-hidden flex flex-col">
+    
+    <!-- PANTALLA 1: CÁMARA & DISPARADOR -->
+    <section id="screenCamera" class="h-full flex flex-col justify-between p-4 relative">
+      
+      <!-- Visor -->
+      <div class="relative w-full flex-1 rounded-3xl overflow-hidden border border-slate-800/80 bg-slate-900 flex items-center justify-center shadow-2xl">
+        <!-- video con muted y playsinline para compatibilidad total con iPhone -->
+        <video id="videoFeed" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+        <img id="frozenPhoto" class="w-full h-full object-contain hidden" />
+        <canvas id="captureCanvas" class="hidden"></canvas>
+        
+        <!-- Retícula -->
+        <div id="viewfinder" class="absolute inset-6 border border-white/10 rounded-2xl pointer-events-none flex flex-col justify-between p-4 animate-pulse-slow">
+          <div class="flex justify-between">
+            <div class="w-5 h-5 border-t-2 border-l-2 border-emerald-400"></div>
+            <div class="w-5 h-5 border-t-2 border-r-2 border-emerald-400"></div>
+          </div>
+          <div class="text-center">
+            <span class="text-[11px] font-medium text-slate-300 bg-slate-950/80 px-3 py-1.5 rounded-full border border-slate-800 backdrop-blur-md">
+              Apunta al componente o detalle
+            </span>
+          </div>
+          <div class="flex justify-between">
+            <div class="w-5 h-5 border-b-2 border-l-2 border-emerald-400"></div>
+            <div class="w-5 h-5 border-b-2 border-r-2 border-emerald-400"></div>
+          </div>
+        </div>
+
+        <!-- Overlay de Carga -->
+        <div id="analyzingOverlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center gap-3 hidden z-30">
+          <div class="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-400 rounded-full animate-spin"></div>
+          <p id="analysisStepText" class="text-xs font-bold tracking-wider text-emerald-400 uppercase mt-2">Analizando con IA...</p>
+        </div>
+      </div>
+
+      <!-- Controles inferiores -->
+      <div class="h-24 flex items-center justify-around px-2">
+        <label class="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col items-center justify-center text-slate-400 hover:text-white cursor-pointer active:scale-95 transition">
+          <input type="file" accept="image/*" class="hidden" onchange="handleFileUpload(event)">
+          <i class="fa-solid fa-images text-sm"></i>
+          <span class="text-[9px] mt-0.5 font-medium">Fotos</span>
+        </label>
+
+        <!-- Disparador -->
+        <button onclick="captureAndAnalyze()" class="relative group active:scale-95 transition">
+          <div class="w-20 h-20 rounded-full border-4 border-emerald-500/40 p-1 flex items-center justify-center group-hover:border-emerald-400 transition">
+            <div class="w-full h-full rounded-full bg-emerald-500 flex items-center justify-center text-slate-950 text-xl font-bold shadow-lg shadow-emerald-500/30">
+              <i class="fa-solid fa-camera"></i>
+            </div>
+          </div>
+        </button>
+
+        <!-- Casos offline -->
+        <button onclick="openCasesModal()" class="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col items-center justify-center text-amber-400 hover:text-amber-300 active:scale-95 transition">
+          <i class="fa-solid fa-vial text-sm"></i>
+          <span class="text-[9px] mt-0.5 font-medium">Casos</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- PANTALLA 2: RESPUESTA ACCIONABLE -->
+    <section id="screenResult" class="h-full hidden flex-col overflow-y-auto p-4 space-y-4 pb-20">
+      
+      <!-- Volver atrás -->
+      <button onclick="backToCamera()" class="text-xs text-slate-400 hover:text-white flex items-center gap-2 self-start py-1">
+        <i class="fa-solid fa-arrow-left"></i> Volver a la cámara
+      </button>
+
+      <!-- SEMÁFORO DE SEGURIDAD -->
+      <div id="secAlertBox" class="p-3.5 rounded-2xl border flex items-start gap-3 text-xs">
+        <i id="secAlertIcon" class="fa-solid fa-shield-halved text-base mt-0.5 flex-shrink-0"></i>
+        <div>
+          <div id="secAlertTitle" class="font-bold tracking-wide uppercase text-[10px]">Evaluación de Seguridad</div>
+          <div id="secAlertMsg" class="mt-0.5 leading-snug">Verificando condiciones de riesgo...</div>
+        </div>
+      </div>
+
+      <!-- TARJETA PRINCIPAL -->
+      <div class="glass rounded-3xl border border-slate-800 p-5 space-y-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <span id="resCategory" class="text-[10px] font-black uppercase tracking-wider text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-lg">CATEGORÍA</span>
+            <h2 id="resTitle" class="text-xl font-bold text-white mt-1.5 leading-tight">Objeto</h2>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <div id="resConfidence" class="text-2xl font-black text-emerald-400">--%</div>
+            <div class="text-[9px] uppercase tracking-wider text-slate-500 font-bold">Confianza</div>
+          </div>
+        </div>
+
+        <!-- Evidencia -->
+        <div class="space-y-1.5 pt-1">
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Evidencia visual observada:</p>
+          <div id="resEvidence" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
+        <!-- Faltantes -->
+        <div id="resMissingBox" class="p-3 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-xs space-y-1.5">
+          <div class="flex items-center gap-2 text-sky-400 font-bold text-[11px]">
+            <i class="fa-solid fa-circle-question"></i>
+            <span>Para confirmar al 100% se necesita:</span>
+          </div>
+          <ul id="resMissingList" class="list-disc list-inside text-slate-300 text-[11px] space-y-0.5 pl-1"></ul>
+        </div>
+      </div>
+
+      <!-- BOTONES DE ACCIÓN DINÁMICOS -->
+      <div class="space-y-2">
+        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">¿Qué necesitas hacer?</label>
+        <div id="resActions" class="grid grid-cols-2 gap-2 text-xs"></div>
+
+        <div id="actionDetailCard" class="hidden p-4 rounded-2xl bg-slate-900 border border-slate-800 text-xs text-slate-200 leading-relaxed space-y-1">
+          <div id="actionDetailTitle" class="font-bold text-emerald-400 text-sm"></div>
+          <div id="actionDetailContent" class="text-slate-300"></div>
+        </div>
+      </div>
+
+      <!-- GUARDAR Y COMPARTIR -->
+      <div class="grid grid-cols-2 gap-2 pt-2">
+        <button onclick="saveObject()" class="py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 font-semibold text-xs flex items-center justify-center gap-2">
+          <i class="fa-solid fa-bookmark text-emerald-400"></i> Guardar
+        </button>
+        <button onclick="shareWhatsApp()" class="py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center justify-center gap-2">
+          <i class="fa-brands fa-whatsapp text-sm"></i> Compartir
+        </button>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- MODAL CONFIGURACIÓN API -->
+  <div id="configModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-5 space-y-4 text-xs">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+        <h3 class="font-bold text-sm text-white flex items-center gap-2">
+          <i class="fa-solid fa-key text-amber-400"></i> Gemini API Key
+        </h3>
+        <button onclick="toggleModal('configModal')" class="text-slate-400 hover:text-white p-1"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="text-slate-400 text-[11px] leading-relaxed">
+        Pega tu clave gratuita de <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-emerald-400 underline font-semibold">Google AI Studio</a>. Se guarda únicamente en tu teléfono.
+      </p>
+      <div class="space-y-1">
+        <input type="text" id="geminiApiKey" placeholder="AIzaSy..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono text-xs focus:border-emerald-500 focus:outline-none">
+      </div>
+      <button onclick="saveApiKey()" class="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl transition">
+        Guardar Clave
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL CASOS OFFLINE -->
+  <div id="casesModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-end sm:items-center justify-center p-3">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-5 space-y-3 text-xs max-h-[85vh] flex flex-col">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+        <h3 class="font-bold text-sm text-white">Casos de Prueba</h3>
+        <button onclick="toggleModal('casesModal')" class="text-slate-400 hover:text-white p-1"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="casesList" class="flex-1 overflow-y-auto space-y-1.5 pr-1"></div>
+    </div>
+  </div>
+
+  <!-- MODAL INVENTARIO -->
+  <div id="inventoryModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-end sm:items-center justify-center p-3">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-5 space-y-3 text-xs max-h-[85vh] flex flex-col">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+        <h3 class="font-bold text-sm text-white">Mis Objetos</h3>
+        <button onclick="toggleModal('inventoryModal')" class="text-slate-400 hover:text-white p-1"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="savedList" class="flex-1 overflow-y-auto space-y-2 pr-1"></div>
+    </div>
+  </div>
+
+  <script>
+    // CASOS OFFLINE
+    const PRD_TEST_CASES = [
+      {
+        name: "Botella de Vidrio / Envase",
+        cat: "Hogar / Contenedor",
+        conf: 92,
+        sec: { level: "green", msg: "Objeto inerte. Manejar con cuidado para evitar roturas por impacto." },
+        evidence: ["Cuerpo cilíndrico transparente", "Tapa roscada", "Líquido en su interior"],
+        missing: ["Etiqueta nutricional o química para confirmar contenido exacto"],
+        actions: [
+          { icon: "🔍", label: "¿Qué contiene?", title: "Identificación de Contenido", content: "Si no tiene etiqueta, no bebas el líquido. Comprueba el olor a distancia prudente y verifica si hay sedimentos." },
+          { icon: "♻️", label: "Cómo reciclarla", title: "Reciclaje", content: "Lava el envase, retira la tapa plástica y deposítalo en el contenedor verde de vidrio." }
+        ]
+      },
+      {
+        name: "Rodamiento 6204-2RS",
+        cat: "Mecánica",
+        conf: 85,
+        sec: { level: "green", msg: "Pieza mecánica segura de manipular en reposo." },
+        evidence: ["Diámetro exterior 47mm", "Sellos de caucho negro"],
+        missing: ["Medición con pie de metro para confirmar serie"],
+        actions: [
+          { icon: "🩺", label: "Comprobar estado", title: "Diagnóstico", content: "Gira el anillo interior; si sientes aspereza, cámbialo." }
+        ]
+      }
+    ];
+
+    let currentStream = null;
+    let currentData = null;
+    let apiKey = (localStorage.getItem('apunta_gemini_key') || '').trim();
+
+    window.addEventListener('DOMContentLoaded', () => {
+      startCamera();
+      renderCasesList();
+      updateInventoryBadge();
+      updateKeyUI();
+    });
+
+    function updateKeyUI() {
+      const label = document.getElementById('keyStatusText');
+      if (apiKey) {
+        label.innerText = "Key Activa";
+        label.className = "text-[10px] text-emerald-400 font-semibold";
+        document.getElementById('geminiApiKey').value = apiKey;
+      } else {
+        label.innerText = "Falta Key";
+        label.className = "text-[10px] text-amber-400 font-semibold";
+      }
+    }
+
+    // INICIAR CÁMARA (Compatible con iPhone)
+    async function startCamera() {
+      const video = document.getElementById('videoFeed');
+      if (currentStream) {
+        currentStream.getTracks().forEach(t => t.stop());
+      }
+      try {
+        currentStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } },
+          audio: false
+        });
+        video.srcObject = currentStream;
+        video.classList.remove('hidden');
+        await video.play();
+      } catch (err) {
+        console.warn("No se pudo iniciar cámara directa:", err);
+      }
+    }
+
+    // CAPTURA
+    function captureAndAnalyze() {
+      const video = document.getElementById('videoFeed');
+      const canvas = document.getElementById('captureCanvas');
+
+      if (!apiKey) {
+        alert("⚠️ Ingresa primero tu Gemini API Key en el botón superior [Config Key] para analizar fotos reales.");
+        toggleModal('configModal');
+        return;
+      }
+
+      showLoading(true, "Capturando imagen...");
+
+      let base64 = null;
+      if (video.videoWidth > 0) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        base64 = canvas.toDataURL('image/jpeg', 0.85);
+      }
+
+      if (base64) {
+        analyzeWithGemini(base64);
+      } else {
+        showLoading(false);
+        alert("No se pudo capturar imagen del visor. Asegúrate de dar permisos de cámara o usa el botón 'Fotos'.");
+      }
+    }
+
+    function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!apiKey) {
+        alert("⚠️ Ingresa primero tu API Key en [Config Key].");
+        toggleModal('configModal');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        showLoading(true, "Procesando foto...");
+        analyzeWithGemini(event.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // LLAMADA A GEMINI CON REPORTE EXACTO DE ERRORES
+    async function analyzeWithGemini(fullBase64) {
+      const pureBase64 = fullBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+      showLoading(true, "Consultando a Gemini...");
+
+      const prompt = `Analiza este objeto y responde EXCLUSIVAMENTE un JSON válido (sin markdown, sin comillas triples) con este formato:
+{
+  "name": "Nombre de la pieza u objeto",
+  "cat": "Categoría",
+  "conf": 85,
+  "sec": { "level": "green", "msg": "Instrucción de seguridad clara" },
+  "evidence": ["evidencia visual 1", "evidencia visual 2"],
+  "missing": ["detalle faltante para estar 100% seguro"],
+  "actions": [
+    { "icon": "🔍", "label": "¿Para qué sirve?", "title": "Uso principal", "content": "Explicación directa." },
+    { "icon": "🛠️", "label": "¿Qué hago con esto?", "title": "Acción recomendada", "content": "Paso 1... Paso 2..." }
+  ]
+}`;
+
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: "image/jpeg", data: pureBase64 } }
+              ]
+            }]
+          })
+        });
+
+        const data = await resp.json();
+
+        // Si Google reportó un error específico (clave inválida, cuota, etc.)
+        if (data.error) {
+          throw new Error(`Google API: ${data.error.message || JSON.stringify(data.error)}`);
+        }
+
+        if (!data.candidates || data.candidates.length === 0) {
+          throw new Error("Gemini no generó respuesta para esta imagen (posible bloqueo de seguridad).");
+        }
+
+        const rawText = data.candidates[0].content.parts[0].text;
+        const cleanJson = rawText.replace(/```json/gi, '').replace(/```/gi, '').trim();
+        const parsed = JSON.parse(cleanJson);
+        loadResult(parsed);
+
+      } catch (err) {
+        alert("⚠️ Detalle del problema:\n\n" + err.message);
+        // Volver a activar la cámara en caso de error
+        backToCamera();
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // CARGAR RESULTADOS
+    function loadResult(data) {
+      currentData = data;
+      document.getElementById('screenCamera').classList.add('hidden');
+      document.getElementById('screenResult').classList.remove('hidden');
+      document.getElementById('screenResult').classList.add('flex');
+
+      // Seguridad
+      const secBox = document.getElementById('secAlertBox');
+      const secTitle = document.getElementById('secAlertTitle');
+      const secMsg = document.getElementById('secAlertMsg');
+      const secIcon = document.getElementById('secAlertIcon');
+
+      secMsg.innerText = data.sec.msg;
+      if (data.sec.level === 'red') {
+        secBox.className = "p-3.5 rounded-2xl border bg-rose-500/20 border-rose-500/50 text-rose-300 animate-pulse";
+        secTitle.innerText = "⚠️ PELIGRO CRÍTICO";
+        secIcon.className = "fa-solid fa-triangle-exclamation text-base mt-0.5 text-rose-400";
+      } else if (data.sec.level === 'yellow') {
+        secBox.className = "p-3.5 rounded-2xl border bg-amber-500/10 border-amber-500/40 text-amber-300";
+        secTitle.innerText = "PRECAUCIÓN";
+        secIcon.className = "fa-solid fa-circle-exclamation text-base mt-0.5 text-amber-400";
+      } else {
+        secBox.className = "p-3.5 rounded-2xl border bg-emerald-500/10 border-emerald-500/30 text-emerald-300";
+        secTitle.innerText = "MANIPULACIÓN SEGURA";
+        secIcon.className = "fa-solid fa-shield-check text-base mt-0.5 text-emerald-400";
+      }
+
+      document.getElementById('resTitle').innerText = data.name;
+      document.getElementById('resCategory').innerText = data.cat;
+      document.getElementById('resConfidence').innerText = `${data.conf}%`;
+
+      // Evidencia
+      const evBox = document.getElementById('resEvidence');
+      evBox.innerHTML = '';
+      (data.evidence || []).forEach(item => {
+        const chip = document.createElement('span');
+        chip.className = "bg-slate-900 border border-slate-800 text-[10px] text-slate-300 px-2 py-1 rounded-lg flex items-center gap-1.5";
+        chip.innerHTML = `<i class="fa-solid fa-check text-emerald-400 text-[9px]"></i> ${item}`;
+        evBox.appendChild(chip);
+      });
+
+      // Faltantes
+      const missList = document.getElementById('resMissingList');
+      missList.innerHTML = '';
+      (data.missing || []).forEach(m => {
+        const li = document.createElement('li');
+        li.innerText = m;
+        missList.appendChild(li);
+      });
+
+      // Acciones
+      const actContainer = document.getElementById('resActions');
+      actContainer.innerHTML = '';
+      const detailCard = document.getElementById('actionDetailCard');
+      detailCard.classList.add('hidden');
+
+      (data.actions || []).forEach(action => {
+        const btn = document.createElement('button');
+        btn.className = "p-3 rounded-2xl bg-slate-900 border border-slate-800 text-left font-semibold text-slate-200 hover:border-emerald-500/50 hover:bg-slate-800 active:scale-95 transition flex items-center gap-2";
+        btn.innerHTML = `<span class="text-base">${action.icon || '👉'}</span> <span class="leading-tight">${action.label}</span>`;
+        btn.onclick = () => {
+          document.getElementById('actionDetailTitle').innerHTML = `${action.icon || ''} ${action.title}`;
+          document.getElementById('actionDetailContent').innerHTML = action.content;
+          detailCard.classList.remove('hidden');
+        };
+        actContainer.appendChild(btn);
+      });
+    }
+
+    // VOLVER A LA CÁMARA (Sin recargar página)
+    function backToCamera() {
+      document.getElementById('screenResult').classList.add('hidden');
+      document.getElementById('screenResult').classList.remove('flex');
+      document.getElementById('screenCamera').classList.remove('hidden');
+      
+      const video = document.getElementById('videoFeed');
+      video.classList.remove('hidden');
+      if (video.paused) {
+        video.play().catch(e => console.log(e));
+      }
+    }
+
+    function showLoading(show, text = "") {
+      const overlay = document.getElementById('analyzingOverlay');
+      if (show) {
+        document.getElementById('analysisStepText').innerText = text;
+        overlay.classList.remove('hidden');
+      } else {
+        overlay.classList.add('hidden');
+      }
+    }
+
+    function toggleModal(id) {
+      document.getElementById(id).classList.toggle('hidden');
+    }
+
+    function openCasesModal() {
+      toggleModal('casesModal');
+    }
+
+    function saveApiKey() {
+      const val = document.getElementById('geminiApiKey').value.trim();
+      localStorage.setItem('apunta_gemini_key', val);
+      apiKey = val;
+      updateKeyUI();
+      toggleModal('configModal');
+      alert("✅ Clave guardada correctamente.");
+    }
+
+    // GUARDAR EN MEMORIA LOCAL
+    function saveObject() {
+      if (!currentData) return;
+      let inventory = JSON.parse(localStorage.getItem('apunta_saved_objects') || '[]');
+      inventory.unshift({
+        name: currentData.name,
+        cat: currentData.cat,
+        date: new Date().toLocaleDateString(),
+        fullData: currentData
+      });
+      localStorage.setItem('apunta_saved_objects', JSON.stringify(inventory));
+      updateInventoryBadge();
+      alert("✅ Guardado en Mis Objetos.");
+    }
+
+    function updateInventoryBadge() {
+      const list = JSON.parse(localStorage.getItem('apunta_saved_objects') || '[]');
+      document.getElementById('invBadge').innerText = list.length;
+    }
+
+    function openInventory() {
+      const modal = document.getElementById('inventoryModal');
+      const container = document.getElementById('savedList');
+      const list = JSON.parse(localStorage.getItem('apunta_saved_objects') || '[]');
+
+      container.innerHTML = '';
+      if (list.length === 0) {
+        container.innerHTML = "<p class='text-slate-500 text-center py-6'>No tienes objetos guardados aún.</p>";
+      } else {
+        list.forEach((item, index) => {
+          const row = document.createElement('div');
+          row.className = "p-3 rounded-2xl bg-slate-950 border border-slate-800 flex justify-between items-center";
+          row.innerHTML = `
+            <div class="cursor-pointer flex-1" onclick="restoreObject(${index})">
+              <div class="font-bold text-white text-xs">${item.name}</div>
+              <div class="text-[10px] text-slate-400">${item.cat} • ${item.date}</div>
+            </div>
+            <button onclick="deleteSavedObject(${index})" class="text-rose-400 p-2">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          `;
+          container.appendChild(row);
+        });
+      }
+      modal.classList.remove('hidden');
+    }
+
+    function restoreObject(index) {
+      const list = JSON.parse(localStorage.getItem('apunta_saved_objects') || '[]');
+      if (list[index]) {
+        toggleModal('inventoryModal');
+        loadResult(list[index].fullData);
+      }
+    }
+
+    function deleteSavedObject(index) {
+      let list = JSON.parse(localStorage.getItem('apunta_saved_objects') || '[]');
+      list.splice(index, 1);
+      localStorage.setItem('apunta_saved_objects', JSON.stringify(list));
+      openInventory();
+      updateInventoryBadge();
+    }
+
+    function shareWhatsApp() {
+      if (!currentData) return;
+      const text = `🔍 *Identificado con APUNTA:*\n\n` +
+                   `📦 *Objeto:* ${currentData.name}\n` +
+                   `📊 *Certeza:* ${currentData.conf}%\n` +
+                   `⚠️ *Seguridad:* ${currentData.sec.msg}`;
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    }
+
+    function renderCasesList() {
+      const listContainer = document.getElementById('casesList');
+      listContainer.innerHTML = '';
+      PRD_TEST_CASES.forEach((c) => {
+        const item = document.createElement('div');
+        item.className = "p-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 cursor-pointer transition flex items-center justify-between";
+        item.innerHTML = `
+          <div>
+            <div class="font-bold text-white text-xs">${c.name}</div>
+            <div class="text-[10px] text-slate-400">${c.cat}</div>
+          </div>
+          <span class="text-[10px] font-bold text-emerald-400">${c.conf}%</span>
+        `;
+        item.onclick = () => {
+          toggleModal('casesModal');
+          loadResult(c);
+        };
+        listContainer.appendChild(item);
+      });
+    }
+  </script>
+</body>
+</html>
